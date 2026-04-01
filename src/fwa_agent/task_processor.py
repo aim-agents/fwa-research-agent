@@ -36,23 +36,32 @@ class TaskClassifier:
     """Classifies FieldWorkArena tasks into stages."""
 
     PLANNING_KEYWORDS = [
-        "plan", "procedure", "workflow", "extract", "document", "video",
-        "protocol", "steps", "sequence", "schedule", "organize", "structure"
+        "plan", "procedure", "workflow", "extract from", "document",
+        "protocol", "steps", "sequence", "organize", "structure"
     ]
     PERCEPTION_KEYWORDS = [
         "detect", "identify", "classify", "violation", "safety", "ppe",
-        "incident", "spatial", "observe", "recognize", "find", "locate",
-        "anomaly", "compliance", "hazard"
+        "spatial", "observe", "recognize", "locate",
+        "anomaly", "compliance", "hazard", "find"
     ]
     ACTION_KEYWORDS = [
         "execute", "report", "perform", "action", "submit", "complete",
-        "carry out", "implement", "do", "run", "process"
+        "carry out", "implement", "run", "process", "incident report",
+        "incident findings", "maintenance"
     ]
+
+    # Strong action indicators - these override perception if present
+    STRONG_ACTION = ["report the", "execute the", "perform the", "submit the"]
 
     @classmethod
     def classify(cls, task_text: str) -> TaskStage:
         """Classify a task into Planning, Perception, or Action stage."""
         task_lower = task_text.lower()
+
+        # Check for strong action indicators first
+        for indicator in cls.STRONG_ACTION:
+            if indicator in task_lower:
+                return TaskStage.ACTION
 
         scores = {
             TaskStage.PLANNING: sum(1 for kw in cls.PLANNING_KEYWORDS if kw in task_lower),

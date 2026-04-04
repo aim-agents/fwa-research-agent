@@ -17,10 +17,10 @@ from typing import Any
 
 import httpx
 import uvicorn
-from a2a.server.agent_execution import AgentExecution, RequestContext
+from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.apps import A2AStarletteApplication
 from a2a.server.events import EventQueue
-from a2a.server.request_handler import DefaultRequestHandler
+from a2a.server.request_handlers import DefaultRequestHandler
 from a2a.types import (
     AgentCard,
     AgentCapabilities,
@@ -239,7 +239,7 @@ Output structured JSON with: actions_taken (step, result), observations, issues,
         return best if scores[best] > 0 else "perception"
 
 
-class FWAPurpleAgentExecution(AgentExecution):
+class FWAPurpleAgentExecution(AgentExecutor):
     """A2A Agent Execution handler for FieldWorkArena purple agent."""
 
     def __init__(self):
@@ -250,15 +250,15 @@ class FWAPurpleAgentExecution(AgentExecution):
         task_id = context.task_id
         logger.info(f"Executing FWA task: {task_id}")
 
-        messages = context.messages
-        if not messages:
+        message = context.message
+        if not message or not message.parts:
             await event_queue.enqueue_event(
                 new_agent_text_message("No task provided.", context_id=context.context_id, task_id=task_id)
             )
             return
 
         # Extract task from last message
-        last_message = messages[-1]
+        last_message = message
         task_text = ""
         images = []
 
@@ -302,7 +302,7 @@ class FWAPurpleAgentExecution(AgentExecution):
 
     async def cancel(self, context: RequestContext, event_queue: EventQueue) -> None:
         """Cancel is not supported."""
-        raise UnsupportedOperationError("Cancel not supported")
+        raise Exception("Cancel not supported")
 
 
 def create_agent_card(host: str, port: int) -> AgentCard:
@@ -315,9 +315,9 @@ def create_agent_card(host: str, port: int) -> AgentCard:
         ),
         url=f"http://{host}:{port}",
         version="0.1.0",
-        capabilities=AgentCapabilities(streaming=False, pushNotifications=False),
-        defaultInputModes=["text/plain", "application/json"],
-        defaultOutputModes=["text/plain"],
+        capabilities=AgentCapabilities(streaming=False),
+        default_input_modes=["text/plain", "application/json"],
+        default_output_modes=["text/plain"],
         skills=[
             AgentSkill(
                 id="planning",
@@ -354,12 +354,15 @@ def main():
             logger.error("Cannot start: OPENAI_API_KEY is required")
             sys.exit(1)
 
+    from a2a.server.tasks import InMemoryTaskStore
+
     logger.info(f"Starting FWA Research Agent on {config.host}:{config.port}")
     logger.info(f"Using model: {config.model}")
 
     agent_card = create_agent_card(config.host, config.port)
     execution = FWAPurpleAgentExecution()
-    request_handler = DefaultRequestHandler(agent_executor=execution, agent_card=agent_card)
+    task_store = InMemoryTaskStore()
+    request_handler = DefaultRequestHandler(agent_executor=execution, task_store=task_store)
 
     server = A2AStarletteApplication(agent_card=agent_card, http_handler=request_handler)
 

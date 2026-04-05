@@ -48,12 +48,25 @@ config = AgentConfig()
 
 
 class OpenAIClient:
-    """Wrapper for OpenAI client with retry logic."""
+    """Wrapper for LLM client with retry logic, supporting multiple providers."""
 
     def __init__(self, config: AgentConfig):
-        self.client = OpenAI(api_key=config.openai_api_key)
         self.config = config
         self._cache: dict[str, str] = {}
+        
+        # Initialize the appropriate client based on provider
+        if config.llm_provider == "openrouter":
+            self.client = OpenAI(
+                api_key=config.openrouter_api_key,
+                base_url="https://openrouter.ai/api/v1"
+            )
+        elif config.llm_provider == "groq":
+            self.client = OpenAI(
+                api_key=config.groq_api_key,
+                base_url="https://api.groq.com/openai/v1"
+            )
+        else:
+            self.client = OpenAI(api_key=config.openai_api_key)
 
     def _cache_key(self, messages: list, model: str) -> str:
         """Generate cache key from messages."""
@@ -68,7 +81,7 @@ class OpenAIClient:
         temperature: float | None = None,
     ) -> str:
         """Create chat completion with retry logic."""
-        model = model or self.config.model
+        model = model or self.config.get_model_name()
         max_tokens = max_tokens or self.config.max_tokens
         temperature = temperature if temperature is not None else self.config.temperature
 

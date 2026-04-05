@@ -17,9 +17,17 @@ class AgentConfig:
     host: str = field(default_factory=lambda: os.getenv("FWA_HOST", "0.0.0.0"))
     port: int = field(default_factory=lambda: int(os.getenv("FWA_PORT", "9019")))
 
-    # OpenAI settings
+    # LLM Provider settings
+    llm_provider: str = field(default_factory=lambda: os.getenv("LLM_PROVIDER", "openai"))  # openai, openrouter, groq
     openai_api_key: str = field(default_factory=lambda: os.getenv("OPENAI_API_KEY", ""))
+    openrouter_api_key: str = field(default_factory=lambda: os.getenv("OPENROUTER_API_KEY", ""))
+    groq_api_key: str = field(default_factory=lambda: os.getenv("GROQ_API_KEY", ""))
+    
+    # Model settings
     model: str = field(default_factory=lambda: os.getenv("FWA_MODEL", "gpt-4o"))
+    openrouter_model: str = field(default_factory=lambda: os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini"))
+    groq_model: str = field(default_factory=lambda: os.getenv("GROQ_MODEL", "llama-3.1-8b-instant"))
+    
     max_tokens: int = 2048
     temperature: float = 0.1
 
@@ -46,14 +54,33 @@ class AgentConfig:
     @property
     def is_configured(self) -> bool:
         """Check if minimum required config is present."""
+        if self.llm_provider == "openrouter":
+            return bool(self.openrouter_api_key)
+        elif self.llm_provider == "groq":
+            return bool(self.groq_api_key)
         return bool(self.openai_api_key)
+
+    def get_model_name(self) -> str:
+        """Get the actual model name based on provider."""
+        if self.llm_provider == "openrouter":
+            return self.openrouter_model
+        elif self.llm_provider == "groq":
+            return self.groq_model
+        return self.model
 
     def validate(self) -> list[str]:
         """Validate configuration and return list of issues."""
         issues = []
 
-        if not self.openai_api_key:
-            issues.append("OPENAI_API_KEY is required")
+        if self.llm_provider == "openrouter":
+            if not self.openrouter_api_key:
+                issues.append("OPENROUTER_API_KEY is required when LLM_PROVIDER=openrouter")
+        elif self.llm_provider == "groq":
+            if not self.groq_api_key:
+                issues.append("GROQ_API_KEY is required when LLM_PROVIDER=groq")
+        else:
+            if not self.openai_api_key:
+                issues.append("OPENAI_API_KEY is required")
 
         if not self.hf_token:
             issues.append("HF_TOKEN is recommended for full dataset access")
